@@ -33,7 +33,6 @@
 4. 고객이 주문을 취소할 수 있다
 5. 주문이 취소되면 결제가 취소된다
 6. 고객이 주문상태를 중간중간 조회한다
-7. 배송이 완료되면 쿠폰이 지급된다.
 
 ***추가 기능적 요구사항***
 
@@ -43,13 +42,13 @@
 
 비기능적 요구사항
 1. 트랜잭션
-    1. 주문이 완료되어야 결제가 가능하다.  Sync 호출 
+    1. 리뷰를 통한 주문이 완료 되어야 결제가 가능하다.
 2. 장애격리
     1. 쿠폰발급기능이 수행되지 않더라도 주문은 365일 24시간 받을 수 있어야 한다  Async (event-driven), Eventual Consistency
-    1. 결제시스템이 과중되면 주문을 잠시동안 받지 않고 결제를 잠시후에 하도록 유도한다  Circuit breaker, fallback
+    1. 리뷰를 통한 결제시스템이 과중되면 주문을 잠시동안 받지 않고 결제를 잠시후에 하도록 유도한다  Circuit breaker, fallback
 3. 성능
-    1. 고객이 주문에 대한 상태를 시스템에서 확인할 수 있다 CQRS
-    1. 배달이 완료되면 쿠폰이 발행된다  Event driven
+    1. 고객이 주문 및 리뷰에 대한 상태를 시스템에서 확인할 수 있다 CQRS
+    1. 배달이 완료되면 리뷰를 작성 할 수 있다  Event driven
 
 
 # 체크포인트
@@ -112,7 +111,7 @@
 # 분석/설계
     
 ### 이벤트 도출
-* MSAEz 로 모델링한 이벤트스토밍 결과:  http://www.msaez.io/#/storming/ZTi9sAEiJxRHIn5xXAA2Lkn9KNV2/mine/de3fac4ae58d3699a80eb8ac15eabe8c/-MLCf4nI9XHFhdCI2DhE
+* MSAEz 로 모델링한 이벤트스토밍 결과:  http://www.msaez.io/#/storming/yAObDa1Re3WS7AwhIwSMcpwZwBH2/mine/71d0b707070bab4570137c835cc7d4bb/-MLDgWUgImpfGESNNdCA
 
 ![image](https://user-images.githubusercontent.com/70673848/98124211-3a125480-1ef6-11eb-8c3a-e73d38cbad33.png)
 
@@ -139,7 +138,7 @@
 
 # 구현:
 
-분석/설계 단계에서 도출된 헥사고날 아키텍처에 따라, 각 BC별로 대변되는 마이크로 서비스들을 스프링부트와 파이선으로 구현하였다. 구현한 각 서비스를 로컬에서 실행하는 방법은 아래와 같다 (각자의 포트넘버는 8081 ~ 8085이다)
+분석/설계 단계에서 도출된 헥사고날 아키텍처에 따라, 각 BC별로 대변되는 마이크로 서비스들을 스프링부트와 파이선으로 구현하였다. 구현한 각 서비스를 로컬에서 실행하는 방법은 아래와 같다 (각자의 포트넘버는 8081 ~ 8086이다)
 
 ```
 cd order
@@ -157,57 +156,64 @@ mvn spring-boot:run
 cd coupon
 mvn spring-boot:run
 
+cd review
+mvn spring-boot:run
+
 ```
 
 ## DDD 의 적용
 
-- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 pay 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다. 하지만, 일부 구현에 있어서 영문이 아닌 경우는 실행이 불가능한 경우가 있기 때문에 계속 사용할 방법은 아닌것 같다. (Maven pom.xml, Kafka의 topic id, FeignClient 의 서비스 id 등은 한글로 식별자를 사용하는 경우 오류가 발생하는 것을 확인하였다)
+- 각 서비스내에 도출된 핵심 Aggregate Root 객체를 Entity 로 선언하였다: (예시는 review 마이크로 서비스). 이때 가능한 현업에서 사용하는 언어 (유비쿼터스 랭귀지)를 그대로 사용하려고 노력했다. 하지만, 일부 구현에 있어서 영문이 아닌 경우는 실행이 불가능한 경우가 있기 때문에 계속 사용할 방법은 아닌것 같다. (Maven pom.xml, Kafka의 topic id, FeignClient 의 서비스 id 등은 한글로 식별자를 사용하는 경우 오류가 발생하는 것을 확인하였다)
 
 ```
-package pizza;
+package pizzalgh;
 
 import javax.persistence.*;
 import org.springframework.beans.BeanUtils;
 import java.util.List;
 
 @Entity
-@Table(name="Order_table")
-public class Order {
+@Table(name="Review_table")
+public class Review {
 
     @Id
     @GeneratedValue(strategy=GenerationType.AUTO)
     private Long id;
-    private Long pizzaId;
-    // LDH 소스추가 초기값 설정
-    private String orderStatus ="Ordered";
-    private Long qty;
+    private Long addpizzaId;
+    private String addorderstatus = "AddedOrdered";
+    private Long addqty;
+    private Long orderedId;
+    private String reviewtext;
 
     @PostPersist
     public void onPostPersist(){
-        Ordered ordered = new Ordered();
-        BeanUtils.copyProperties(this, ordered);
-        ordered.publishAfterCommit();
+        Written written = new Written();
+        BeanUtils.copyProperties(this, written);
+        written.publishAfterCommit();
+
+
+        Addordered addordered = new Addordered();
+        BeanUtils.copyProperties(this, addordered);
+        addordered.publishAfterCommit();
 
         //Following code causes dependency to external APIs
         // it is NOT A GOOD PRACTICE. instead, Event-Policy mapping is recommended.
 
-        pizza.external.Payment payment = new pizza.external.Payment();
-        
-        payment.setOrderId(this.getId());
-        payment.setPaymentStatus("Paid");
-
+        pizzalgh.external.Order order = new pizzalgh.external.Order();
         // mappings goes here
-        OrderApplication.applicationContext.getBean(pizza.external.PaymentService.class)
-            .doPayment(payment);
+
+        if(this.getAddqty() != null && this.getAddqty() != 0 )
+        {
+            order.setOrderStatus("Ordered");
+            order.setPizzaId(addordered.getAddpizzaId());
+            order.setQty(addordered.getAddqty());
+
+            ReviewApplication.applicationContext.getBean(pizzalgh.external.OrderService.class)
+                    .order(order);
+
+        }
 
 
-    }
-
-    @PostUpdate
-    public void onPostUpdate(){
-        OrderCanceled orderCanceled = new OrderCanceled();
-        BeanUtils.copyProperties(this, orderCanceled);
-        orderCanceled.publishAfterCommit();
 
 
     }
@@ -220,46 +226,60 @@ public class Order {
     public void setId(Long id) {
         this.id = id;
     }
-    public Long getPizzaId() {
-        return pizzaId;
+    public Long getAddpizzaId() {
+        return addpizzaId;
     }
 
-    public void setPizzaId(Long pizzaId) {
-        this.pizzaId = pizzaId;
+    public void setAddpizzaId(Long addpizzaId) {
+        this.addpizzaId = addpizzaId;
     }
-    public String getOrderStatus() {
-        return orderStatus;
-    }
-
-    public void setOrderStatus(String orderStatus) {
-        this.orderStatus = orderStatus;
-    }
-    public Long getQty() {
-        return qty;
+    public String getAddorderstatus() {
+        return addorderstatus;
     }
 
-    public void setQty(Long qty) {
-        this.qty = qty;
+    public void setAddorderstatus(String addorderstatus) {
+        this.addorderstatus = addorderstatus;
+    }
+    public Long getAddqty() {
+        return addqty;
     }
 
+    public void setAddqty(Long addqty) {
+        this.addqty = addqty;
+    }
+    public Long getOrderedId() {
+        return orderedId;
+    }
 
+    public void setOrderedId(Long orderedId) {
+        this.orderedId = orderedId;
+    }
+    public String getReviewtext() {
+        return reviewtext;
+    }
+
+    public void setReviewtext(String reviewtext) {
+        this.reviewtext = reviewtext;
+    }
 }
 
+
 ```
-- Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
+- Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or In Memory DB) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
 ```
-package pizza;
+package pizzalgh;
 
 import org.springframework.data.repository.PagingAndSortingRepository;
 
-public interface PurchaseRepository extends PagingAndSortingRepository<Purchase, Long>{
- 
+public interface ReviewRepository extends PagingAndSortingRepository<Review, Long>{
+
 }
 ```
 - 적용 후 REST API 의 테스트
 ```
 # 주문처리
-http http://order:8080/order qty=10 pizzaId=10
+http POST http://localhost:8081/orders orderStatus=“Ordered” pizzaId=1 qty=1
+
 ```
 
 ![image](https://user-images.githubusercontent.com/70673848/98125248-975ad580-1ef7-11eb-9aa2-8c1f95dc9d6f.png)
@@ -272,7 +292,7 @@ http localhost:8081/orders/1
 
 ## 폴리글랏 퍼시스턴스
 
-H2가 아닌 Derby in-memory DB를 사용함
+H2가 아닌 HSQL in-memory DB를 사용함
 
 ```
 <dependency>
@@ -289,14 +309,15 @@ H2가 아닌 Derby in-memory DB를 사용함
 
 ## 동기식 호출 과 Fallback 처리
 
-분석단계에서의 조건 중 하나로 주문(order)->결제(payment) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
+분석단계에서의 조건 중 하나로 재주문(Addedorder)->결제(payment) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
 
 - 결제서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
 
 ```
-# (payment) PaymentService.java
+# (payment) ReviewService.java
 
-package takbaeyo.external;
+
+package pizzalgh.external;
 
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -305,50 +326,67 @@ import org.springframework.web.bind.annotation.RequestMethod;
 
 import java.util.Date;
 
-@FeignClient(name="payment", url="http://localhost:8082")
-public interface PaymentService {
+//@FeignClient(name="order", url="http://order:8080")//origin
+@FeignClient(name="order", url="http://localhost:8081")//local
+//@FeignClient(name="order", url="http://api.url.:8080")
+public interface OrderService {
 
-    @RequestMapping(method= RequestMethod.POST, path="/payments")
-    public void dopay(@RequestBody Payment payment);
+    @RequestMapping(method= RequestMethod.POST, path="/orders")
+    public void order(@RequestBody Order order);
 
 }
 ```
 
 - 주문을 받은 직후(@PostPersist) 결제를 요청하도록 처리
 ```
-# order.java (Entity)
+# review.java (Entity)
    @PostPersist
     public void onPostPersist(){
-        Ordered ordered = new Ordered();
-        BeanUtils.copyProperties(this, ordered);
-        ordered.publishAfterCommit();
+        Written written = new Written();
+        BeanUtils.copyProperties(this, written);
+        written.publishAfterCommit();
 
-        pizza.external.Payment payment = new pizza.external.Payment();
 
-        payment.setOrderId(this.getId());
-        payment.setPaymentStatus("Paid");
+        Addordered addordered = new Addordered();
+        BeanUtils.copyProperties(this, addordered);
+        addordered.publishAfterCommit();
 
-        OrderApplication.applicationContext.getBean(pizza.external.PaymentService.class)
-        .doPayment(payment);
+        //Following code causes dependency to external APIs
+        // it is NOT A GOOD PRACTICE. instead, Event-Policy mapping is recommended.
+
+        pizzalgh.external.Order order = new pizzalgh.external.Order();
+        // mappings goes here
+
+        if(this.getAddqty() != null && this.getAddqty() != 0 )
+        {
+            order.setOrderStatus("Ordered");
+            order.setPizzaId(addordered.getAddpizzaId());
+            order.setQty(addordered.getAddqty());
+
+            ReviewApplication.applicationContext.getBean(pizzalgh.external.OrderService.class)
+                    .order(order);
+
+        }
+    }
 ```
 
 - 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 주문도 못받는다는 것을 확인:
 
 
 ```
-# 결제 (payment) 서비스를 잠시 내려놓음 (ctrl+c)
+# 주문 (order) 서비스를 잠시 내려놓음
 
-#주문처리
-http localhost:8081/orders pizzaId=1 qty=1   #Fail
+#"재"주문처리
+http http://localhost:8086/revies addpizzaId=3 reviewtext=“review3”   #Fail
 ```
 ![image](https://user-images.githubusercontent.com/70673848/98130658-d9871580-1efd-11eb-9447-0175789ca9f1.png)
 ```
-#결제서비스 재기동
-cd payment
+#주문서비스 재기동
+cd order
 mvn spring-boot:run
 
-#주문처리
-http localhost:8081/orders pizzaId=1 qty=1   #Success
+#재주문처리
+http http://localhost:8086/revies addpizzaId=3 reviewtext=“review3”   #Success
 ```
 ![image](https://user-images.githubusercontent.com/70673848/98130748-ef94d600-1efd-11eb-83f6-6acad31ce584.png)
 
@@ -359,42 +397,39 @@ http localhost:8081/orders pizzaId=1 qty=1   #Success
 
 ## 비동기식 호출 / 시간적 디커플링 / 장애격리 / 최종 (Eventual) 일관성 테스트
 
-배달이 이루어진 후에 쿠폰시스템으로 이를 알려주는 행위는 동기식이 아니라 비 동기식으로 처리하여 쿠폰 시스템의 처리를 위하여 주문이 블로킹 되지 않아도록 처리한다.
+리뷰 작성이 이루어진 후에 쿠폰시스템으로 이를 알려주는 행위는 동기식이 아니라 비 동기식으로 처리하여 쿠폰 시스템의 처리를 위하여 주문이 블로킹 되지 않아도록 처리한다.
  
-- 이를 위하여 배달이력에 기록을 남긴 후에 곧바로 쿠폰이 발행 되었다는 도메인 이벤트를 카프카로 송출한다(Publish)
+- 이를 위하여 리뷰작성에 기록을 남긴 후에 곧바로 쿠폰이 발행 되었다는 도메인 이벤트를 카프카로 송출한다(Publish)
  
 ```
-package pizza;
-
-import javax.persistence.*;
-import org.springframework.beans.BeanUtils;
-import java.util.List;
-
 @Entity
-@Table(name="Delivery_table")
-public class Delivery {
+@Table(name="Review_table")
+public class Review {
 
     @Id
     @GeneratedValue(strategy=GenerationType.AUTO)
     private Long id;
-    private String deliveryStatus;
-    private Long orderId;
+    private Long addpizzaId;
+    private String addorderstatus = "AddedOrdered";
+    private Long addqty;
+    private Long orderedId;
+    private String reviewtext;
 
     @PostPersist
     public void onPostPersist(){
-        Delivered delivered = new Delivered();
-        BeanUtils.copyProperties(this, delivered);
-        delivered.publishAfterCommit();
+        Written written = new Written();
+        BeanUtils.copyProperties(this, written);
+        written.publishAfterCommit();
 
 
     }
 ```
-- 배달완료 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다:
+- 쿠폰발행 이벤트에 대해서 이를 수신하여 자신의 정책을 처리하도록 PolicyHandler 를 구현한다:
 
 ```
-package pizza;
+package pizzalgh;
 
-import pizza.config.kafka.KafkaProcessor;
+import pizzalgh.config.kafka.KafkaProcessor;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -404,9 +439,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class PolicyHandler{
-
     @Autowired
-    CouponRepository CouponRepository;
+    CouponRepository couponRepository;
 
     @StreamListener(KafkaProcessor.INPUT)
     public void onStringEventListener(@Payload String eventString){
@@ -414,14 +448,15 @@ public class PolicyHandler{
     }
 
     @StreamListener(KafkaProcessor.INPUT)
-    public void wheneverDelivered_PublishCoupon(@Payload Delivered delivered){
+    public void wheneverWritten_PublishCoupon(@Payload Written written){
 
-        if(delivered.isMe()){
-
+        if(written.isMe()){
+            System.out.println("##### listener PublishCoupon : " + written.toJson());
             Coupon coupon = new Coupon();
-            CouponRepository.save(coupon);
+            coupon.setOrderId(written.getOrderedId());
 
-            System.out.println("##### listener PublishCoupon : " + delivered.toJson());
+
+            couponRepository.save(coupon);
         }
     }
 
@@ -448,22 +483,14 @@ public class PolicyHandler{
 cd coupon
 mvn spring-boot:run
 
-모든 주문의 상태가 "배송됨"으로 확인
+쿠폰이 발행됨을 확인
 ```
 ![image](https://user-images.githubusercontent.com/70673848/98188001-89d43880-1f55-11eb-95a9-00a556648bb1.png)
 
 
 ## CQRS 적용
 
-order의 처리 결과
-
-![image](https://user-images.githubusercontent.com/70673848/98133383-df322a80-1f00-11eb-84ec-86c79e322f64.png)
-
-delivery의 처리 결과 
-
-![image](https://user-images.githubusercontent.com/70673848/98133397-e3f6de80-1f00-11eb-9576-5b3ac711f0c4.png)
-
-주문현황을 VIEW로 구현
+추가된 reviewtext 확인 가능
 
 ![image](https://user-images.githubusercontent.com/70673848/98133365-d8a3b300-1f00-11eb-9d98-65cb337cc926.png)
 

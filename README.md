@@ -618,7 +618,7 @@ kubectl apply -f kubernetes/deployment.yaml
 
 ## Liveness 구현
 
-- delivery 의 depolyment.yaml 소스 설정
+- review 의 depolyment.yaml 소스 설정
 서비스포트 8080이 아닌 고의로 8081로 포트 변경하여 강제로 재기동 되도록 설정 한다.
 
 ```

@@ -278,7 +278,7 @@ public interface ReviewRepository extends PagingAndSortingRepository<Review, Lon
 - 적용 후 REST API 의 테스트
 ```
 # 주문처리
-http POST http://localhost:8081/orders orderStatus=“Ordered” pizzaId=1 qty=1
+http POST http://localhost:8086/reviews addpizzaId=2 addqty=2 reviewtext="review1"
 
 ```
 
@@ -304,9 +304,9 @@ H2가 아닌 HSQL in-memory HSQL을 사용함
 
 ## 동기식 호출 과 Fallback 처리
 
-분석단계에서의 조건 중 하나로 재주문(Addedorder)->결제(payment) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
+분석단계에서의 조건 중 하나로 "재"주문(Addedorder)->주문(order) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
 
-- 결제서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
+- 결제서비스를 호출하기 위하여 FeignClient를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
 
 ```
 # Review의 OrderService.java
@@ -516,9 +516,9 @@ application.yaml파일에 소스 적용
 
 * 서킷 브레이킹 프레임워크의 선택: Spring FeignClient + Hystrix 옵션을 사용하여 구현함
 
-시나리오는 주문(order)-->결제(payment) 의 연결을 RESTful Request/Response 로 연동하여 구현이 되어있고, 결제 요청이 과도할 경우 CB 를 통하여 장애격리.
+시나리오는 재주문(Addorder)-->주문(order) 의 연결을 RESTful Request/Response 로 연동하여 구현이 되어있고, 결제 요청이 과도할 경우 CB 를 통하여 장애격리.
 
-- order의 application.yaml 파일에 Hystrix 를 설정: 요청처리 쓰레드에서 처리시간이 500 밀리가 넘어서기 시작하여 어느정도 유지되면 CB 회로가 닫히도록 (요청을 빠르게 실패처리, 차단) 설정
+- 재주문(Addorder)의 application.yaml 파일에 Hystrix 를 설정: 요청처리 쓰레드에서 처리시간이 500 밀리가 넘어서기 시작하여 어느정도 유지되면 CB 회로가 닫히도록 (요청을 빠르게 실패처리, 차단) 설정
 ```
 # application.yml
 feign:
@@ -531,7 +531,7 @@ hystrix:
       execution.isolation.thread.timeoutInMilliseconds: 500
 
 ```
-- 피호출 서비스 pament onPostPersist영역의 부하코드 추가 - 400 밀리에서 증감 350 밀리 정도 왔다갔다 하게
+- 피호출 서비스 order onPostPersist영역의 부하코드 추가 - 400 밀리에서 증감 350 밀리 정도 왔다갔다 하게
 ```
 # order.java (Entity)
 
@@ -549,7 +549,7 @@ hystrix:
     }
 ```
 
-![image](https://user-images.githubusercontent.com/70673848/98189992-6e6b2c80-1f59-11eb-9851-9fa3380fa05d.png)
+![image](https://user-images.githubusercontent.com/67869000/98332658-6c30cd00-2042-11eb-9925-24e97d296806.png)
 
 -운영시스템은 죽지 않고 지속적으로 CB 에 의하여 적절히 회로가 열림과 닫힘이 벌어지면서 자원을 보호하고 있음을 보여줌. 
 72% 가 성공하였고, 고객 사용성에 있어 좋지 않기 때문에 28%를 커버하기위하여  Retry 설정과 동적 Scale out (replica의 자동적 추가,HPA) 을 통하여 시스템을 확장 해주는 후속처리가 필요.

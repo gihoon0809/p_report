@@ -278,7 +278,7 @@ public interface ReviewRepository extends PagingAndSortingRepository<Review, Lon
 ```
 - 적용 후 REST API 의 테스트
 ```
-# 주문처리
+# 리뷰 
 http POST http://localhost:8086/reviews addpizzaId=2 addqty=2 reviewtext="review1"
 
 ```

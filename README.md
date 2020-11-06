@@ -113,7 +113,7 @@
 ### 이벤트 도출
 * MSAEz 로 모델링한 이벤트스토밍 결과:  http://www.msaez.io/#/storming/yAObDa1Re3WS7AwhIwSMcpwZwBH2/mine/71d0b707070bab4570137c835cc7d4bb/-MLDgWUgImpfGESNNdCA
 
-![image](https://user-images.githubusercontent.com/70673848/98124211-3a125480-1ef6-11eb-8c3a-e73d38cbad33.png)
+![image](https://user-images.githubusercontent.com/67869000/98326272-2ec54300-2034-11eb-92bf-2f7ff81c7cd7.png)
 
  도메인 서열 분리 
    
@@ -129,7 +129,7 @@
 ## 헥사고날 아키텍처 다이어그램 도출
 
 
-![image](https://user-images.githubusercontent.com/70673848/98185027-1fb89500-1f4f-11eb-82c8-c194f6aa7ded.png)
+![image](https://user-images.githubusercontent.com/67869000/98326344-5c11f100-2034-11eb-9cf4-6b435ab58e63.png)
 
     - Chris Richardson, MSA Patterns 참고하여 Inbound adaptor와 Outbound adaptor를 구분함
     - 호출관계에서 PubSub 과 Req/Resp 를 구분함
@@ -282,17 +282,12 @@ http POST http://localhost:8081/orders orderStatus=“Ordered” pizzaId=1 qty=1
 
 ```
 
-![image](https://user-images.githubusercontent.com/70673848/98125248-975ad580-1ef7-11eb-9aa2-8c1f95dc9d6f.png)
+![image](https://user-images.githubusercontent.com/67869000/98327357-abf1b780-2036-11eb-8d02-08d2e9cfafe8.png)
 
-```
-# 주문 상태 확인
-http localhost:8081/orders/1
-```
-![image](https://user-images.githubusercontent.com/70673848/98125455-da1cad80-1ef7-11eb-8c74-bec335853edc.png)
 
 ## 폴리글랏 퍼시스턴스
 
-H2가 아닌 HSQL in-memory DB를 사용함
+H2가 아닌 HSQL in-memory HSQL을 사용함
 
 ```
 <dependency>
@@ -303,7 +298,7 @@ H2가 아닌 HSQL in-memory DB를 사용함
 </dependency>
 ```
 
-![image](https://user-images.githubusercontent.com/70673848/98189149-b38e5f00-1f57-11eb-9017-15370565c091.png)
+![image](https://user-images.githubusercontent.com/67869000/98327541-17d42000-2037-11eb-8cf2-12c62091ed23.png)
 
 
 
@@ -314,7 +309,7 @@ H2가 아닌 HSQL in-memory DB를 사용함
 - 결제서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
 
 ```
-# (payment) ReviewService.java
+# Review의 OrderService.java
 
 
 package pizzalgh.external;
@@ -328,7 +323,7 @@ import java.util.Date;
 
 //@FeignClient(name="order", url="http://order:8080")//origin
 @FeignClient(name="order", url="http://localhost:8081")//local
-//@FeignClient(name="order", url="http://api.url.:8080")
+//@FeignClient(name="order", url="http://api.url.order:8080")
 public interface OrderService {
 
     @RequestMapping(method= RequestMethod.POST, path="/orders")
@@ -337,7 +332,7 @@ public interface OrderService {
 }
 ```
 
-- 주문을 받은 직후(@PostPersist) 결제를 요청하도록 처리
+- "재"주문을 받은 직후(@PostPersist) 결제를 요청하도록 처리
 ```
 # review.java (Entity)
    @PostPersist
@@ -379,7 +374,9 @@ public interface OrderService {
 #"재"주문처리
 http http://localhost:8086/revies addpizzaId=3 reviewtext=“review3”   #Fail
 ```
-![image](https://user-images.githubusercontent.com/70673848/98130658-d9871580-1efd-11eb-9447-0175789ca9f1.png)
+
+![image](https://user-images.githubusercontent.com/67869000/98327825-d1cb8c00-2037-11eb-9a81-06294e8d083c.png)
+
 ```
 #주문서비스 재기동
 cd order
@@ -388,7 +385,7 @@ mvn spring-boot:run
 #재주문처리
 http http://localhost:8086/revies addpizzaId=3 reviewtext=“review3”   #Success
 ```
-![image](https://user-images.githubusercontent.com/70673848/98130748-ef94d600-1efd-11eb-83f6-6acad31ce584.png)
+![image](https://user-images.githubusercontent.com/67869000/98327950-0b03fc00-2038-11eb-862e-91369d4ded51.png)
 
 - 또한 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다. (서킷브레이커, 폴백 처리는 운영단계에서 설명한다.)
 
@@ -467,16 +464,11 @@ public class PolicyHandler{
 
 쿠폰 시스템은 배송서비스와 완전히 분리되어있으며, 이벤트 수신에 따라 처리되기 때문에, 쿠폰 시스템이 유지보수로 인해 잠시 내려간 상태라도 주문을 받는데 문제가 없다:
 
-
-
-![image](https://user-images.githubusercontent.com/70673848/98187965-7b861c80-1f55-11eb-8ce1-4ec6798e50df.png)
-![image](https://user-images.githubusercontent.com/70673848/98187975-7de87680-1f55-11eb-8a1f-35e74d86a864.png)
 ```
 쿠폰 서비스를 잠시 내려놓음 
 ```
-![image](https://user-images.githubusercontent.com/70673848/98187982-817bfd80-1f55-11eb-946c-3fea9417de92.png)
-![image](https://user-images.githubusercontent.com/70673848/98187989-83de5780-1f55-11eb-9b3a-1e678cf63948.png)
-![image](https://user-images.githubusercontent.com/70673848/98187993-86d94800-1f55-11eb-8976-d6aabbe0d48e.png)
+
+![image](https://user-images.githubusercontent.com/67869000/98328258-a72e0300-2038-11eb-895b-015853d87323.png)
 
 ```
 쿠폰 서비스 재기동
@@ -492,7 +484,7 @@ mvn spring-boot:run
 
 추가된 reviewtext 확인 가능
 
-![image](https://user-images.githubusercontent.com/70673848/98133365-d8a3b300-1f00-11eb-9d98-65cb337cc926.png)
+![image](https://user-images.githubusercontent.com/67869000/98328287-b7de7900-2038-11eb-89f4-cd924b75c092.png)
 
 
 ## gateway 적용
@@ -500,11 +492,11 @@ mvn spring-boot:run
 application.yaml파일에 소스 적용
 
 
-![image](https://user-images.githubusercontent.com/70673848/98185841-ccdfdd00-1f50-11eb-8566-10ac8d20791f.png)
+![image](https://user-images.githubusercontent.com/67869000/98328380-f1af7f80-2038-11eb-9d6f-d6cd5026ab35.png)
 
 호출확인
 
-![image](https://user-images.githubusercontent.com/70673848/98185850-cfdacd80-1f50-11eb-8bdb-66e0c4e59169.png)
+![image](https://user-images.githubusercontent.com/67869000/98328312-c7f65880-2038-11eb-826c-57b3566368b0.png)
 
 # 운영
 

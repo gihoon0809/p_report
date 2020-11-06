@@ -477,7 +477,7 @@ mvn spring-boot:run
 
 쿠폰이 발행됨을 확인
 ```
-![image](https://user-images.githubusercontent.com/70673848/98188001-89d43880-1f55-11eb-95a9-00a556648bb1.png)
+![image](https://user-images.githubusercontent.com/67869000/98328469-291e2c00-2039-11eb-87f6-63ff56deb9b3.png)
 
 
 ## CQRS 적용
@@ -503,13 +503,13 @@ application.yaml파일에 소스 적용
 ## CI/CD 설정
 각 구현체들은 각자의 source repository 에 구성되었고, 사용한 CI/CD 플랫폼은 Azure를 사용하였으며, pipeline build script 는 각 프로젝트 폴더 이하에 deployment.yml, service.yml 에 포함되었다.
 
-![image](https://user-images.githubusercontent.com/70673848/98127099-a6428780-1ef9-11eb-9bda-b770e18224ae.png)
+![image](https://user-images.githubusercontent.com/67869000/98328602-769a9900-2039-11eb-8000-56a33d07699d.png)
 
-![image](https://user-images.githubusercontent.com/70673848/98127386-ff122000-1ef9-11eb-8cf4-eb0692915a9e.png)
+![image](https://user-images.githubusercontent.com/67869000/98328644-8dd98680-2039-11eb-91b9-8301f0e59317.png)
 
-![image](https://user-images.githubusercontent.com/70673848/98127453-1224f000-1efa-11eb-8e85-bbf578a71189.png)
+![image](https://user-images.githubusercontent.com/67869000/98328693-a6e23780-2039-11eb-8561-bad4908a9111.png)
 
-![image](https://user-images.githubusercontent.com/70673848/98127526-2832b080-1efa-11eb-92d5-e5237bb17d83.png)
+![image](https://user-images.githubusercontent.com/67869000/98328713-b1043600-2039-11eb-9da8-d838f826f356.png)
 
 
 ## 동기식 호출 / 서킷 브레이킹 / 장애격리
@@ -531,9 +531,9 @@ hystrix:
       execution.isolation.thread.timeoutInMilliseconds: 500
 
 ```
-- 피호출 서비스 pament onPostPersist영역의 부하코드 추가 - 400 밀리에서 증감 220 밀리 정도 왔다갔다 하게
+- 피호출 서비스 pament onPostPersist영역의 부하코드 추가 - 400 밀리에서 증감 350 밀리 정도 왔다갔다 하게
 ```
-# payment.java (Entity)
+# order.java (Entity)
 
     @PostPersist
     public void onPostPersist(){
@@ -542,7 +542,7 @@ hystrix:
         paid.publishAfterCommit();
 
         try {
-            Thread.sleep((long) (400 + Math.random() * 300));
+            Thread.sleep((long) (400 + Math.random() * 350));
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -560,30 +560,23 @@ hystrix:
 앞서 CB 는 시스템을 안정되게 운영할 수 있게 해줬지만 사용자의 요청을 100% 받아들여주지 못했기 때문에 이에 대한 보완책으로 자동화된 확장 기능을 적용하고자 한다. 
 
 
-- 결제서비스에 대한 replica 를 동적으로 늘려주도록 HPA 를 설정한다. 설정은 CPU 사용량이 15프로를 넘어서면 replica 를 10개까지 늘려준다:
+- 결제서비스에 대한 replica 를 동적으로 늘려주도록 HPA 를 설정한다. 설정은 CPU 사용량이 20프로를 넘어서면 replica 를 10개까지 늘려준다:
 ```
-kubectl autoscale deploy pay --min=1 --max=10 --cpu-percent=15
+kubectl autoscale deployment review --cpu-percent=20 --min=1 --max=10
 ```
 ![image](https://user-images.githubusercontent.com/70673848/98128510-5cf33780-1efb-11eb-8f1d-56e3eacb5d6a.png)
 
 - CB 에서 했던 방식대로 워크로드를 2분 동안 걸어준다.
 ```
-siege -c100 -t120S -r10 --content-type "application/json" 'http://localhost:8081/orders POST {"pizzaId":1,"qty":2}
+siege -c100 -t120S -r10 --content-type "application/json" 'http://review:8080/reviews POST {"pizzaId":1,"addqty":2}
 
 ```
 - 오토스케일이 어떻게 되고 있는지 모니터링을 걸어둔다:
 ```
 kubectl get deploy payment -w
 ```
-- 어느정도 시간이 흐른 후 (약 30초) 스케일 아웃이 벌어지는 것을 확인할 수 있다:
-![image](https://user-images.githubusercontent.com/70673848/98128628-77c5ac00-1efb-11eb-9b45-8dbdbf340980.png)
-
-```
-- siege 의 로그를 보아도 전체적인 성공률이 높아진 것을 확인 할 수 있다. 
-
-```
-![image](https://user-images.githubusercontent.com/70673848/98187606-ad4ab380-1f54-11eb-8bb6-8d791f5f3090.png)
-
+- 어느정도 시간이 흐른 후 (약 60초) 스케일 아웃이 벌어지는 것을 확인할 수 있다:
+![image](https://user-images.githubusercontent.com/67869000/98328900-31c33200-203a-11eb-8ce3-d7ae9dfbd322.png)
 
 
 ## 무정지 재배포
@@ -592,7 +585,7 @@ kubectl get deploy payment -w
 
 - seige 로 배포작업 직전에 워크로드를 모니터링 함.
 ```
-siege -c100 -t120S -r10 --content-type "application/json" 'http://localhost:8081/orders POST {"pizzaId":10, "qty":10}'
+siege -c100 -t120S -r10 --content-type "application/json" 'http://review:8081/reviews POST {"pizzaId":10, "addqty":10}'
 
 ```
 
@@ -603,11 +596,11 @@ kubectl set image ...
 
 - seige 의 화면으로 넘어가서 Availability 가 100% 미만으로 떨어졌는지 확인
 
-![image](https://user-images.githubusercontent.com/70673848/98135259-f6721780-1f02-11eb-99b9-e8bac256177d.png)
+![image](https://user-images.githubusercontent.com/67869000/98328987-76e76400-203a-11eb-9ff9-2d0f1d115c00.png)
 
 
 
-배포기간중 Availability 가 평소 100%에서 90% 대로 떨어지는 것을 확인. 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함:
+배포기간중 Availability 가 평소 100%에서 95% 대로 떨어지는 것을 확인. 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함:
 
 ```
 # deployment.yaml 의 readiness probe 의 설정:
@@ -617,7 +610,7 @@ kubectl apply -f kubernetes/deployment.yaml
 
 - 동일한 시나리오로 재배포 한 후 Availability 확인:
 
-![image](https://user-images.githubusercontent.com/70673848/98135292-fffb7f80-1f02-11eb-876e-937a98b39f91.png)
+![image](https://user-images.githubusercontent.com/67869000/98329026-9088ab80-203a-11eb-9ce9-86df33d3c191.png)
 
 
 배포기간 동안 Availability 가 변화없기 때문에 무정지 재배포가 성공한 것으로 확인됨.
@@ -625,10 +618,15 @@ kubectl apply -f kubernetes/deployment.yaml
 ## Liveness 구현
 
 - delivery 의 depolyment.yaml 소스 설정
-http get방식에서 tcp방식으로 변경, 서비스포트 8080이 아닌 고의로 8081로 포트 변경하여 강제로 재기동 되도록 설정 한다.
+서비스포트 8080이 아닌 고의로 8081로 포트 변경하여 강제로 재기동 되도록 설정 한다.
 
+```
+비정상 상태의 pod 정보 확인
+kubectl get pod review-76d87c986-w67xw
+```
 
-![image](https://user-images.githubusercontent.com/70673848/98129462-7d6fc180-1efc-11eb-9d79-a651ee57d3db.png)
+![image](https://user-images.githubusercontent.com/67869000/98329062-a72f0280-203a-11eb-9b61-9a46bc41d1d2.png)
+
 
 
 

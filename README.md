@@ -573,7 +573,7 @@ siege -c100 -t120S -r10 --content-type "application/json" 'http://review:8080/re
 ```
 - 오토스케일이 어떻게 되고 있는지 모니터링을 걸어둔다:
 ```
-kubectl get deploy payment -w
+kubectl get deploy review -w
 ```
 - 어느정도 시간이 흐른 후 (약 60초) 스케일 아웃이 벌어지는 것을 확인할 수 있다:
 ![image](https://user-images.githubusercontent.com/67869000/98328900-31c33200-203a-11eb-8ce3-d7ae9dfbd322.png)
